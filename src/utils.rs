@@ -27,8 +27,7 @@ pub fn display_grid(g: SudokuGrid)
 {
     // width = 1+max(len(values[s]) for s in boxes)
     // let width = 2;
-    let line = std::iter::repeat("-").take(9).collect::<String>();
-    let line = std::iter::repeat(line).take(3).collect::<Vec<String>>().join("+");
+    let line = "---------+---------+---------";
     for r in ROWS.chars()
     {
         let value_str = COLS.chars()
