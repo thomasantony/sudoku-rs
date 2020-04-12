@@ -1,11 +1,13 @@
 mod utils;
-use varisat::{Var, Lit};
+use varisat::{Lit};
 use varisat::solver::Solver;
 use itertools::{iproduct};
 use varisat::{CnfFormula, ExtendFormula};
+use utils::SudokuGrid;
+use std::iter::FromIterator;
 
 fn lit_from_value(row: usize, col: usize, value: usize) -> Lit {
-    Var::from_index(row * 9 * 9 + col * 9 + value).lit(true)
+    Lit::from_index(row * 9 * 9 + col * 9 + value, true)
 }
 
 fn exactly_once(literals: &Vec<Lit>) -> CnfFormula{
@@ -19,27 +21,38 @@ fn exactly_once(literals: &Vec<Lit>) -> CnfFormula{
     }
     formula
 }
-fn literals_from_board(board: &utils::SudokuGrid) -> Vec<Lit>
+fn literals_from_board(board: &SudokuGrid) -> CnfFormula
 {
-    board.iter().map(|((row, col), cell)| {
+    let mut formula = CnfFormula::new();
+    board.iter().for_each(|((row, col), cell)| {
         match cell {
             Some(value) => {
-                println!("Adding value {} at {},{}", value, row, col);
-                Some(lit_from_value(*row, *col, *value-1))
+                formula.add_clause(&[lit_from_value(*row, *col, *value -1)]);
             },
-            _ => None
+            _ => {}
         }
-    })
-    .flatten()
-    .collect()
+    });
+    formula
+}
+fn board_from_solution(model: Vec<Lit>) -> SudokuGrid
+{
+    let grid_cells = model.iter()
+        .filter(|l| l.is_positive())
+        .map(|lit|{
+            let index = lit.index();
+            let row = index / 81;
+            let col = (index % 81) / 9;
+            let value = (index % 81) % 9;
+
+            ((row, col), Some(value+1))
+        });
+    SudokuGrid::from_iter(grid_cells)
 }
 fn main() {
-    // // let boxes = utils::create_grid_9x9_keys();
-    let grid_str = "..3.2.6..9..3.5..1..18.64....81.29..7.......8..67.82....26.95..8..2.3..9..5.1.3..";
-
-    // // println!("{:?}", utils::parse_grid(grid_str.to_string()));
-    let grid = utils::parse_grid(grid_str.to_string());
-    utils::display_grid(&grid);
+    let puzzle_str = "..3.2.6..9..3.5..1..18.64....81.29..7.......8..67.82....26.95..8..2.3..9..5.1.3..";
+    let puzzle = utils::parse_grid(puzzle_str.to_string());
+    println!("Puzzle:");
+    utils::display_grid(&puzzle);
 
     let mut solver = Solver::new();
 
@@ -78,12 +91,25 @@ fn main() {
             solver.add_clause(literals.as_slice());
         }
     }
-    // Add in pre-filled boxes
-    let board_lit = literals_from_board(&grid);
-    println!("{:?}", &board_lit);
-    solver.add_clause(& board_lit);
 
-    // let solution = solver.solve().unwrap();
+    // Each number only once
+    for (row, col) in iproduct!(0..9, 0..9)
+    {
+        let mut literals: Vec<Lit> = Vec::new();
+        for value in 0..9
+        {
+            literals.push(lit_from_value(row, col, value));
+        }
+        solver.add_formula(& exactly_once(&literals));
+    }
+    // Add in pre-filled numbers
+    solver.add_formula(& literals_from_board(&puzzle));
+
+    solver.solve().unwrap();
     let model = solver.model().unwrap(); // None if solve didn't return Ok(true)
-    println!("Solution: {:?}", model);
+
+    println!("\nSolution:");
+   
+    let solution = board_from_solution(model);
+    utils::display_grid(&solution);
 }
